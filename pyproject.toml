@@ -13,6 +13,14 @@ dependencies = [
 [project.scripts]
 mcp-proxyml = "mcp_proxyml.server:main"
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [build-system]
 requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
