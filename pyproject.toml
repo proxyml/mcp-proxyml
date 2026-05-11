@@ -1,0 +1,18 @@
+[project]
+name = "mcp-proxyml"
+version = "0.1.0"
+description = "MCP server for the ProxyML API"
+requires-python = ">=3.12"
+dependencies = [
+    "mcp[cli]>=1.0.0",
+    "httpx>=0.27.0",
+    "pandas>=1.5.0",
+    "numpy>=1.23.0",
+]
+
+[project.scripts]
+mcp-proxyml = "mcp_proxyml.server:main"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
