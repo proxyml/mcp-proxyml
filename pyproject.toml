@@ -2,6 +2,19 @@
 name = "mcp-proxyml"
 version = "0.1.0"
 description = "MCP server for the ProxyML API"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "ProxyML", email = "hello@proxyml.ai" }]
+keywords = ["mcp", "proxyml", "explainability", "machine-learning", "counterfactuals", "surrogate"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 requires-python = ">=3.12"
 dependencies = [
     "mcp[cli]>=1.0.0",
@@ -9,6 +22,11 @@ dependencies = [
     "pandas>=1.5.0",
     "numpy>=1.23.0",
 ]
+
+[project.urls]
+Homepage = "https://proxyml.ai"
+Repository = "https://github.com/proxyml/mcp-proxyml"
+"Bug Tracker" = "https://github.com/proxyml/mcp-proxyml/issues"
 
 [project.scripts]
 mcp-proxyml = "mcp_proxyml.server:main"
