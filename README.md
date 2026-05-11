@@ -41,10 +41,9 @@ PROXYML_API_KEY=your-key mcp-proxyml
 
 ## Environment variables
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `PROXYML_API_KEY` | Yes | — | Your ProxyML API key |
-| `PROXYML_BASE_URL` | No | `https://api.proxyml.ai/api/v1` | Override for self-hosted instances |
+| Variable | Required | Description |
+|---|---|---|
+| `PROXYML_API_KEY` | Yes | Your ProxyML API key |
 
 ## Tools
 
