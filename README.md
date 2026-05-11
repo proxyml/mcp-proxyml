@@ -78,6 +78,12 @@ PROXYML_API_KEY=your-key mcp-proxyml
 | `proxyml_find_counterfactual` | Find the nearest point that flips the prediction |
 | `proxyml_diff_models` | Compare feature importances between two surrogate versions |
 
+### CI/CD
+
+| Tool | Description |
+|---|---|
+| `proxyml_detect_drift` | Compare two versions and return a structured pass/fail against coefficient and fidelity thresholds |
+
 ## Typical workflow
 
 ```
@@ -92,3 +98,41 @@ PROXYML_API_KEY=your-key mcp-proxyml
 ```
 
 Steps 1–2 are one-time setup. Steps 3–5 can be repeated to retrain as your model changes; use `proxyml_diff_models` to compare versions.
+
+## Agentic workflows
+
+### Drift detection in CI/CD
+
+`proxyml_detect_drift` is designed for use in deployment pipelines. It wraps `proxyml_diff_models` and applies thresholds to produce a structured pass/fail:
+
+```
+On model deployment:
+1. proxyml_train_surrogate          — train surrogate on new model version
+2. proxyml_detect_drift(a, b)       — compare against previous version
+   → passed: false                  — block deployment or flag for review
+   → passed: true                   — proceed
+```
+
+Thresholds can be tuned per use case:
+
+```
+proxyml_detect_drift(
+  version_a="<previous>",
+  version_b="<new>",
+  coefficient_threshold=0.15,   # tighter for high-stakes models
+  fidelity_threshold=0.02
+)
+```
+
+### Governance report
+
+Claude can generate a governance report from existing tools without a dedicated endpoint. Example prompt:
+
+```
+Using ProxyML, generate a governance report for surrogate version <id>.
+Include: task type, training date, fidelity metrics, top 5 features by importance,
+any warnings from training, and a plain-English summary of what drives predictions.
+Format it as a structured document suitable for attaching to a deployment ticket.
+```
+
+Claude will call `proxyml_get_summary` (and `proxyml_list_surrogates` to find metadata) and compose the report.

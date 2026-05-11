@@ -224,6 +224,94 @@ async def proxyml_diff_models(version_a: str, version_b: str) -> dict:
         return r.json()
 
 
+@mcp.tool()
+async def proxyml_detect_drift(
+    version_a: str,
+    version_b: str,
+    coefficient_threshold: float = 0.1,
+    fidelity_threshold: float = 0.05,
+) -> dict:
+    """Detect behavioural drift between two surrogate versions.
+
+    Calls diff_models and applies thresholds to produce a structured pass/fail
+    suitable for use in CI/CD pipelines.
+
+    coefficient_threshold: flag features whose absolute coefficient delta exceeds this (default 0.1).
+    fidelity_threshold: flag metrics that drop by more than this amount (default 0.05).
+
+    Returns:
+        passed: False if any feature or metric breach a threshold, or if features were added/removed.
+        flagged_features: features whose |delta| exceeded coefficient_threshold, sorted by |delta| desc.
+        metric_changes: per-metric deltas with a 'flagged' key where the drop exceeded fidelity_threshold.
+        features_added / features_removed: schema changes between versions.
+        summary: human-readable explanation of the result.
+    """
+    async with _client() as c:
+        r = await c.get("/explain/diff", params={"version_a": version_a, "version_b": version_b})
+        r.raise_for_status()
+        diff = r.json()
+
+    flagged_features = [
+        entry for entry in diff["coefficient_diff"]
+        if abs(entry["delta"]) > coefficient_threshold
+    ]
+
+    metric_changes = {
+        metric: {**entry, "flagged": entry["delta"] < -fidelity_threshold}
+        for metric, entry in diff["metric_diff"].items()
+    }
+
+    features_added = diff.get("features_added", [])
+    features_removed = diff.get("features_removed", [])
+
+    passed = not flagged_features and not any(
+        v["flagged"] for v in metric_changes.values()
+    ) and not features_added and not features_removed
+
+    reasons = []
+    if flagged_features:
+        top = ", ".join(
+            f"{e['feature']} (Δ={e['delta']:+.3f})" for e in flagged_features[:3]
+        )
+        reasons.append(
+            f"{len(flagged_features)} feature(s) exceeded coefficient threshold "
+            f"({coefficient_threshold}): {top}"
+            + (" and more" if len(flagged_features) > 3 else "")
+        )
+    for metric, entry in metric_changes.items():
+        if entry["flagged"]:
+            reasons.append(
+                f"{metric} dropped by {abs(entry['delta']):.3f} "
+                f"(threshold: {fidelity_threshold})"
+            )
+    if features_added:
+        reasons.append(f"Features added: {', '.join(features_added)}")
+    if features_removed:
+        reasons.append(f"Features removed: {', '.join(features_removed)}")
+
+    if passed:
+        largest = max(
+            (abs(e["delta"]) for e in diff["coefficient_diff"]), default=0.0
+        )
+        summary = (
+            f"PASSED: No significant drift detected. "
+            f"Largest coefficient shift: {largest:.3f} (threshold: {coefficient_threshold})."
+        )
+    else:
+        summary = "FAILED: " + ". ".join(reasons) + "."
+
+    return {
+        "passed": passed,
+        "version_a": version_a,
+        "version_b": version_b,
+        "summary": summary,
+        "flagged_features": flagged_features,
+        "metric_changes": metric_changes,
+        "features_added": features_added,
+        "features_removed": features_removed,
+    }
+
+
 # ---------------------------------------------------------------------------
 
 def main() -> None:
