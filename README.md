@@ -163,6 +163,58 @@ The surrogate acts as a proxy for production behaviour — if the dev model
 agrees with it within tolerance, it's likely behaving consistently with what
 was trained on real data.
 
+### Counterfactual investigation
+
+When a model makes a decision that needs explaining — a rejected loan application,
+a flagged transaction, a declined insurance quote — chain `proxyml_explain_local`
+and `proxyml_find_counterfactual` to answer both "why?" and "what would need to
+change?":
+
+```
+1. proxyml_explain_local(instance)              → which features drove this decision
+2. proxyml_find_counterfactual(instance, target) → nearest point that flips it
+```
+
+Example prompt:
+
+```
+My model rejected this application: [age=34, income=42000, loan_amount=15000, ...].
+Using ProxyML, explain why it was rejected and find the minimum changes that
+would result in an approval. Highlight which changes are realistic given that
+age is immutable.
+```
+
+Claude will call `proxyml_explain_local` to surface the top contributing features,
+then `proxyml_find_counterfactual` with the target outcome, and interpret the
+difference in plain language.
+
+### Iterative surrogate improvement
+
+When `proxyml_train_surrogate` returns a low fidelity warning or other training
+diagnostic, the agent can use it to guide the next iteration rather than stopping:
+
+```
+1. proxyml_train_surrogate(samples, predictions)
+   → warning: "Surrogate fidelity is low (R²=0.52)..."
+2. proxyml_synthesize_data(num_points=500)       — increase sample count
+3. [re-score with model]
+4. proxyml_train_surrogate(larger_samples, predictions)
+5. proxyml_detect_drift(v1, v2)                  — confirm improvement, not regression
+```
+
+Example prompt:
+
+```
+Train a surrogate for my regression model using the "default" schema with 200
+samples. If fidelity is below 0.7, keep doubling the sample count and retraining
+until it passes or you reach 1600 samples. Use proxyml_detect_drift after each
+retrain to confirm the model is improving rather than just changing.
+```
+
+The training warnings (convergence, sparsity, class imbalance, high correlation)
+are designed to be actionable — the agent can read them and decide whether to
+adjust `num_samples`, revisit the schema, or flag for human review.
+
 ### Governance report
 
 Claude can generate a governance report from existing tools without a dedicated endpoint. Example prompt:
