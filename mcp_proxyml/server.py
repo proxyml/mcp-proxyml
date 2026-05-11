@@ -313,6 +313,59 @@ async def proxyml_detect_drift(
 
 
 # ---------------------------------------------------------------------------
+# Account
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+async def proxyml_get_usage() -> dict:
+    """Return current tier, request count, and quota for the authenticated account.
+
+    Useful as a pre-flight check before expensive operations like training or
+    large synthesis runs.
+    """
+    async with _client() as c:
+        r = await c.get("/account/usage")
+        r.raise_for_status()
+        return r.json()
+
+
+# ---------------------------------------------------------------------------
+# Surrogate export and batch explanation
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+async def proxyml_export_surrogate(version: str) -> dict:
+    """Export the full surrogate model: coefficients, intercepts, scaler params, and classes.
+
+    Returns everything needed to reconstruct the surrogate outside ProxyML.
+    Richer than proxyml_get_summary — use this for audit trails and governance reports.
+    """
+    async with _client() as c:
+        r = await c.get(f"/surrogate/models/{version}/export")
+        r.raise_for_status()
+        return r.json()
+
+
+@mcp.tool()
+async def proxyml_explain_local_batch(
+    instances: list[list],
+    version: str | None = None,
+) -> dict:
+    """Per-feature contribution breakdown for multiple instances in one call.
+
+    Equivalent to calling proxyml_explain_local for each instance, but more
+    efficient. Returns a 'results' list in the same order as instances.
+    """
+    payload: dict = {"instances": instances}
+    if version is not None:
+        payload["version"] = version
+    async with _client() as c:
+        r = await c.post("/explain/local/batch", content=json.dumps(payload))
+        r.raise_for_status()
+        return r.json()
+
+
+# ---------------------------------------------------------------------------
 
 def main() -> None:
     mcp.run()

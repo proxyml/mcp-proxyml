@@ -74,7 +74,9 @@ PROXYML_API_KEY=your-key mcp-proxyml
 | Tool | Description |
 |---|---|
 | `proxyml_get_summary` | Feature importances and model summary |
+| `proxyml_export_surrogate` | Full coefficient export for audit and governance |
 | `proxyml_explain_local` | Per-feature contribution breakdown for a single instance |
+| `proxyml_explain_local_batch` | Per-feature contributions for multiple instances in one call |
 | `proxyml_find_counterfactual` | Find the nearest point that flips the prediction |
 | `proxyml_diff_models` | Compare feature importances between two surrogate versions |
 
@@ -83,6 +85,12 @@ PROXYML_API_KEY=your-key mcp-proxyml
 | Tool | Description |
 |---|---|
 | `proxyml_detect_drift` | Compare two versions and return a structured pass/fail against coefficient and fidelity thresholds |
+
+### Account
+
+| Tool | Description |
+|---|---|
+| `proxyml_get_usage` | Current tier, request count, and quota — useful as a pre-flight check |
 
 ## Typical workflow
 
