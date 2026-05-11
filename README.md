@@ -32,6 +32,12 @@ The config file is at:
 
 Then restart Claude Desktop.
 
+### Claude Code
+
+```bash
+claude mcp add-json proxyml '{"command":"uvx","args":["mcp-proxyml"],"env":{"PROXYML_API_KEY":"your-api-key-here"}}'
+```
+
 ### Other MCP clients
 
 ```bash
