@@ -3,14 +3,14 @@ name = "mcp-proxyml"
 version = "0.1.1"
 description = "MCP server for the ProxyML API"
 readme = "README.md"
-license = { text = "MIT" }
-authors = [{ name = "ProxyML", email = "hello@proxyml.ai" }]
+license = { file = "LICENSE" }
+authors = [{ name = "ProxyML", email = "contact@proxyml.ai" }]
 keywords = ["mcp", "proxyml", "explainability", "machine-learning", "counterfactuals", "surrogate"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
