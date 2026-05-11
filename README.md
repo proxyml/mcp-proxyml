@@ -68,6 +68,7 @@ PROXYML_API_KEY=your-key mcp-proxyml
 | `proxyml_synthesize_data` | Generate synthetic samples from the stored schema |
 | `proxyml_train_surrogate` | Train a linear surrogate on samples scored by your model |
 | `proxyml_list_surrogates` | List trained surrogate models, newest first |
+| `proxyml_predict_batch` | Get surrogate predictions for a list of instances |
 
 ### Explainability
 
@@ -131,6 +132,36 @@ proxyml_detect_drift(
   fidelity_threshold=0.02
 )
 ```
+
+### Dev model validation without production data
+
+Validate a model trained in a lower environment by comparing its predictions
+against a surrogate trained on production data — no production data required
+in the dev environment.
+
+This workflow requires a step the MCP server can't do on its own (scoring
+with your dev model), but works naturally in Claude Code where the agent can
+execute code directly:
+
+```
+1. proxyml_synthesize_data(num_points=100)   → synthetic samples
+2. [agent runs: dev_predictions = dev_model.predict(samples)]
+3. proxyml_predict_batch(samples)            → surrogate predictions
+4. [agent computes MAE and compares to tolerance]
+```
+
+Example prompt for Claude Code:
+
+```
+Using ProxyML, validate my dev model against the production surrogate.
+Synthesize 100 samples from the "default" schema, score them with my model
+at dev_model.predict(), get surrogate predictions with proxyml_predict_batch,
+then compute the mean absolute error and tell me whether it's within 0.1.
+```
+
+The surrogate acts as a proxy for production behaviour — if the dev model
+agrees with it within tolerance, it's likely behaving consistently with what
+was trained on real data.
 
 ### Governance report
 

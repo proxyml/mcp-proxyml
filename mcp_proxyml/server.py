@@ -313,6 +313,30 @@ async def proxyml_detect_drift(
 
 
 # ---------------------------------------------------------------------------
+# Surrogate predictions
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+async def proxyml_predict_batch(
+    instances: list[list],
+    version: str | None = None,
+) -> dict:
+    """Get surrogate model predictions for a list of instances.
+
+    Returns predictions in the same order as instances, along with the
+    model version used. Useful for comparing surrogate predictions against
+    a dev model's output on the same synthetic samples.
+    """
+    payload: dict = {"inputs": instances}
+    if version is not None:
+        payload["version"] = version
+    async with _client() as c:
+        r = await c.post("/surrogate/predict/batch", content=json.dumps(payload))
+        r.raise_for_status()
+        return r.json()
+
+
+# ---------------------------------------------------------------------------
 # Account
 # ---------------------------------------------------------------------------
 
