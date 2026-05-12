@@ -51,6 +51,53 @@ PROXYML_API_KEY=your-key mcp-proxyml
 |---|---|---|
 | `PROXYML_API_KEY` | Yes | Your ProxyML API key |
 
+## Security & permissions
+
+### What this server can access
+
+**Filesystem** — `proxyml_infer_schema` reads one CSV file at the path you
+provide. No other tool reads or writes local files.
+
+**Network** — outbound HTTPS only, to `https://api.proxyml.ai` (or the URL
+set in `PROXYML_BASE_URL`). No other hosts are contacted.
+
+**Environment** — only `PROXYML_API_KEY` and `PROXYML_BASE_URL` are read.
+No other environment variables are accessed.
+
+**No shell execution, no local ports, no other system resources.**
+
+### What is sent to ProxyML's servers
+
+| Tool | What is transmitted |
+|---|---|
+| `proxyml_infer_schema` | Nothing — CSV is read and processed locally only |
+| `proxyml_put_schema` | Feature schema: column names, types, and constraints |
+| `proxyml_get_schema` | Schema name (string) |
+| `proxyml_synthesize_data` | Schema name, sample count, and optionally one feature vector |
+| `proxyml_train_surrogate` | Synthetic feature vectors + your model's predictions for those vectors |
+| `proxyml_predict_batch` | Feature vectors you pass explicitly |
+| `proxyml_explain_local` / `proxyml_explain_local_batch` | Feature vector(s) you pass explicitly |
+| `proxyml_find_counterfactual` | One feature vector and a target label |
+| `proxyml_list_surrogates` / `proxyml_get_summary` / `proxyml_export_surrogate` / `proxyml_diff_models` / `proxyml_detect_drift` | Version IDs and/or threshold values (no feature data) |
+| `proxyml_get_usage` | Nothing |
+
+The typical workflow is designed so that raw training data never leaves your
+environment. `proxyml_infer_schema` derives column metadata from your CSV
+locally; `proxyml_synthesize_data` generates samples server-side from that
+schema; and `proxyml_train_surrogate` sends only those synthetic samples
+plus your model's predictions for them. Your original dataset is not
+transmitted.
+
+If you use `proxyml_explain_local`, `proxyml_predict_batch`, or
+`proxyml_find_counterfactual` with real data points rather than synthetic
+ones, those feature vectors will be sent to the ProxyML API.
+
+### Authentication
+
+Your API key is sent on every request as an `X-API-KEY` HTTP header over TLS.
+It is read from the `PROXYML_API_KEY` environment variable and is never
+logged or written to disk by this server.
+
 ## Tools
 
 ### Schema
