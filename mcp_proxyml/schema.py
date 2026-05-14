@@ -1,6 +1,10 @@
+import logging
+
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_float_dtype, is_integer_dtype
+
+logger = logging.getLogger(__name__)
 
 
 def infer_schema(df: pd.DataFrame, immutable_cols: list[str] | None = None) -> dict:
@@ -9,6 +13,11 @@ def infer_schema(df: pd.DataFrame, immutable_cols: list[str] | None = None) -> d
     Integer columns default to 'count'. Consider switching to 'categorical_ordinal'
     for ordered categories like ratings or education level.
     """
+    if immutable_cols:
+        unknown = set(immutable_cols) - set(df.columns)
+        if unknown:
+            logger.warning("immutable_cols not found in DataFrame and will be ignored: %s", sorted(unknown))
+
     features = []
     for col in df.columns:
         immutable = immutable_cols is not None and col in immutable_cols

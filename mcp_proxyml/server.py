@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 
 import httpx
@@ -8,9 +9,12 @@ from mcp.server.fastmcp import FastMCP
 from mcp_proxyml.drift import interpret_diff
 from mcp_proxyml.schema import infer_schema
 
+logger = logging.getLogger(__name__)
+
 mcp = FastMCP("ProxyML")
 
 _DEFAULT_BASE_URL = "https://api.proxyml.ai/api/v1"
+_TIMEOUT = 120.0
 
 
 def _client() -> httpx.AsyncClient:
@@ -23,8 +27,19 @@ def _client() -> httpx.AsyncClient:
     return httpx.AsyncClient(
         base_url=os.environ.get("PROXYML_BASE_URL", _DEFAULT_BASE_URL),
         headers={"X-API-KEY": api_key, "Content-Type": "application/json"},
-        timeout=60.0,
+        timeout=_TIMEOUT,
     )
+
+
+def _result(r: httpx.Response) -> dict:
+    """Return the JSON body on success, or a structured error dict on failure."""
+    if r.is_success:
+        return r.json()
+    try:
+        detail = r.json().get("detail", r.text)
+    except Exception:
+        detail = r.text
+    return {"error": True, "status_code": r.status_code, "detail": detail}
 
 
 # ---------------------------------------------------------------------------
@@ -43,6 +58,8 @@ async def proxyml_infer_schema(
     Integer columns default to 'count'; consider 'categorical_ordinal' for
     ordered categories like ratings or education level.
     """
+    if not os.path.isfile(csv_path):
+        return {"error": True, "detail": f"File not found or not a file: {csv_path}"}
     df = pd.read_csv(csv_path)
     return infer_schema(df, immutable_cols)
 
@@ -56,8 +73,7 @@ async def proxyml_get_schema(schema_name: str = "default") -> dict:
     """Retrieve a stored feature schema by name."""
     async with _client() as c:
         r = await c.get(f"/schema/{schema_name}")
-        r.raise_for_status()
-        return r.json()
+        return _result(r)
 
 
 @mcp.tool()
@@ -65,8 +81,7 @@ async def proxyml_put_schema(schema: dict, schema_name: str = "default") -> dict
     """Upload or replace a feature schema."""
     async with _client() as c:
         r = await c.put(f"/schema/{schema_name}", content=json.dumps(schema))
-        r.raise_for_status()
-        return r.json()
+        return _result(r)
 
 
 # ---------------------------------------------------------------------------
@@ -92,8 +107,7 @@ async def proxyml_synthesize_data(
         else:
             payload = {"n": num_points, "instance": instance, "schema_name": schema_name}
             r = await c.post("/synthesize/blended", content=json.dumps(payload))
-        r.raise_for_status()
-        return r.json()
+        return _result(r)
 
 
 # ---------------------------------------------------------------------------
@@ -133,8 +147,7 @@ async def proxyml_train_surrogate(
         payload["comments"] = comments
     async with _client() as c:
         r = await c.post("/surrogate/train", content=json.dumps(payload))
-        r.raise_for_status()
-        return r.json()
+        return _result(r)
 
 
 @mcp.tool()
@@ -146,8 +159,7 @@ async def proxyml_list_surrogates(limit: int = 50, offset: int = 0) -> dict:
     """
     async with _client() as c:
         r = await c.get("/surrogate/models", params={"limit": limit, "offset": offset})
-        r.raise_for_status()
-        return r.json()
+        return _result(r)
 
 
 # ---------------------------------------------------------------------------
@@ -163,8 +175,7 @@ async def proxyml_get_summary(version: str | None = None) -> dict:
     async with _client() as c:
         params = {"version": version} if version is not None else {}
         r = await c.get("/explain/summary", params=params)
-        r.raise_for_status()
-        return r.json()
+        return _result(r)
 
 
 @mcp.tool()
@@ -182,8 +193,7 @@ async def proxyml_explain_local(
         payload["version"] = version
     async with _client() as c:
         r = await c.post("/explain/local", content=json.dumps(payload))
-        r.raise_for_status()
-        return r.json()
+        return _result(r)
 
 
 @mcp.tool()
@@ -209,8 +219,7 @@ async def proxyml_find_counterfactual(
         payload["version"] = version
     async with _client() as c:
         r = await c.post("/explain/counterfactual", content=json.dumps(payload))
-        r.raise_for_status()
-        return r.json()
+        return _result(r)
 
 
 @mcp.tool()
@@ -221,8 +230,7 @@ async def proxyml_diff_models(version_a: str, version_b: str) -> dict:
     """
     async with _client() as c:
         r = await c.get("/explain/diff", params={"version_a": version_a, "version_b": version_b})
-        r.raise_for_status()
-        return r.json()
+        return _result(r)
 
 
 @mcp.tool()
@@ -275,8 +283,7 @@ async def proxyml_predict_batch(
         payload["version"] = version
     async with _client() as c:
         r = await c.post("/surrogate/predict/batch", content=json.dumps(payload))
-        r.raise_for_status()
-        return r.json()
+        return _result(r)
 
 
 # ---------------------------------------------------------------------------
@@ -292,8 +299,7 @@ async def proxyml_get_usage() -> dict:
     """
     async with _client() as c:
         r = await c.get("/account/usage")
-        r.raise_for_status()
-        return r.json()
+        return _result(r)
 
 
 # ---------------------------------------------------------------------------
@@ -309,8 +315,7 @@ async def proxyml_export_surrogate(version: str) -> dict:
     """
     async with _client() as c:
         r = await c.get(f"/surrogate/models/{version}/export")
-        r.raise_for_status()
-        return r.json()
+        return _result(r)
 
 
 @mcp.tool()
@@ -328,8 +333,133 @@ async def proxyml_explain_local_batch(
         payload["version"] = version
     async with _client() as c:
         r = await c.post("/explain/local/batch", content=json.dumps(payload))
-        r.raise_for_status()
-        return r.json()
+        return _result(r)
+
+
+# ---------------------------------------------------------------------------
+# Additional schema and model management tools
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+async def proxyml_list_schemas() -> dict:
+    """List all named feature schemas for the authenticated account."""
+    async with _client() as c:
+        r = await c.get("/schemas")
+        return _result(r)
+
+
+@mcp.tool()
+async def proxyml_delete_schema(schema_name: str) -> dict:
+    """Delete a named feature schema. Returns success or a structured error."""
+    async with _client() as c:
+        r = await c.delete(f"/schema/{schema_name}")
+        if r.status_code == 204:
+            return {"deleted": True, "schema_name": schema_name}
+        return _result(r)
+
+
+@mcp.tool()
+async def proxyml_get_model_schema(version: str) -> dict:
+    """Retrieve the feature schema that was snapshotted when a surrogate was trained.
+
+    Useful for auditing which schema version a model was trained against.
+    """
+    async with _client() as c:
+        r = await c.get(f"/surrogate/models/{version}/schema")
+        return _result(r)
+
+
+@mcp.tool()
+async def proxyml_update_surrogate(
+    version: str,
+    name: str | None = None,
+    comments: str | None = None,
+) -> dict:
+    """Update the name or comments of a surrogate without retraining.
+
+    Omit a parameter to leave that field unchanged.
+    Pass null/None to clear a field.
+    """
+    payload: dict = {}
+    if name is not None:
+        payload["name"] = name
+    if comments is not None:
+        payload["comments"] = comments
+    if not payload:
+        return {"error": True, "detail": "Provide at least one of: name, comments"}
+    async with _client() as c:
+        r = await c.patch(f"/surrogate/models/{version}", content=json.dumps(payload))
+        return _result(r)
+
+
+@mcp.tool()
+async def proxyml_delete_surrogate(model_id: str) -> dict:
+    """Delete a surrogate model by its UUID. Returns success or a structured error."""
+    async with _client() as c:
+        r = await c.delete(f"/surrogate/models/{model_id}")
+        if r.status_code == 204:
+            return {"deleted": True, "model_id": model_id}
+        return _result(r)
+
+
+@mcp.tool()
+async def proxyml_predict(
+    instance: list,
+    version: str | None = None,
+) -> dict:
+    """Get a surrogate model prediction for a single instance.
+
+    Returns prediction, and optionally probability (classification) or
+    a regression value. Use proxyml_predict_batch for multiple instances.
+    """
+    payload: dict = {"inputs": instance}
+    if version is not None:
+        payload["version"] = version
+    async with _client() as c:
+        r = await c.post("/surrogate/predict", content=json.dumps(payload))
+        return _result(r)
+
+
+@mcp.tool()
+async def proxyml_find_counterfactuals(
+    instances: list[list],
+    target_label: float | str,
+    n_neighbors: int = 10000,
+    perturbation_scale: float = 0.1,
+    version: str | None = None,
+) -> dict:
+    """Find counterfactuals for multiple instances in one call.
+
+    Equivalent to calling proxyml_find_counterfactual for each instance.
+    Each result has a 'counterfactual' field (None if none was found).
+    """
+    payload: dict = {
+        "instances": instances,
+        "target_label": target_label,
+        "n_neighbors": n_neighbors,
+        "perturbation_scale": perturbation_scale,
+    }
+    if version is not None:
+        payload["version"] = version
+    async with _client() as c:
+        r = await c.post("/explain/counterfactual/batch", content=json.dumps(payload))
+        return _result(r)
+
+
+@mcp.tool()
+async def proxyml_health_check() -> dict:
+    """Check API connectivity. Does not require authentication and does not count against usage quota.
+
+    Returns status, model_loaded, and API version. Useful as a pre-flight
+    check before training or synthesis operations.
+    """
+    base_url = os.environ.get("PROXYML_BASE_URL", _DEFAULT_BASE_URL)
+    try:
+        async with httpx.AsyncClient(timeout=_TIMEOUT) as c:
+            r = await c.get(f"{base_url}/health")
+            return _result(r)
+    except httpx.RequestError as exc:
+        return {"error": True, "detail": f"Network error: {exc}"}
 
 
 # ---------------------------------------------------------------------------
