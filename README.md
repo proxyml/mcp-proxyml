@@ -4,7 +4,16 @@ MCP server for the [ProxyML](https://proxyml.ai) API. Gives Claude (and other MC
 
 ## Prerequisites
 
-A ProxyML API key. Sign up at [proxyml.ai](https://proxyml.ai).
+- A ProxyML API key — sign up at [proxyml.ai](https://proxyml.ai)
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) (required for `uvx` installation method)
+
+```bash
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Or if you use `pip`:
+
+```pip install uv```
 
 ## Installation
 
