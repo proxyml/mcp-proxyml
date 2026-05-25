@@ -69,7 +69,7 @@ async def proxyml_infer_schema(
 # ---------------------------------------------------------------------------
 
 @mcp.tool()
-async def proxyml_get_schema(schema_name: str = "default") -> dict:
+async def proxyml_get_schema(schema_name: str) -> dict:
     """Retrieve a stored feature schema by name."""
     async with _client() as c:
         r = await c.get(f"/schema/{schema_name}")
@@ -77,7 +77,7 @@ async def proxyml_get_schema(schema_name: str = "default") -> dict:
 
 
 @mcp.tool()
-async def proxyml_put_schema(schema: dict, schema_name: str = "default") -> dict:
+async def proxyml_put_schema(schema: dict, schema_name: str) -> dict:
     """Upload or replace a feature schema."""
     async with _client() as c:
         r = await c.put(f"/schema/{schema_name}", content=json.dumps(schema))
@@ -90,8 +90,8 @@ async def proxyml_put_schema(schema: dict, schema_name: str = "default") -> dict
 
 @mcp.tool()
 async def proxyml_synthesize_data(
+    schema_name: str,
     num_points: int = 100,
-    schema_name: str = "default",
     instance: list | None = None,
 ) -> dict:
     """Generate synthetic samples from the stored feature schema.
@@ -118,7 +118,7 @@ async def proxyml_synthesize_data(
 async def proxyml_train_surrogate(
     samples: list[list],
     predictions: list,
-    schema_name: str = "default",
+    schema_name: str,
     task: str = "auto",
     test_size: float = 0.2,
     feature_names: list[str] | None = None,
