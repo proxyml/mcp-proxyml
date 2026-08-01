@@ -28,6 +28,18 @@ def _regression_csv(tmp_path, n=70, seed=0):
     return str(path)
 
 
+def _classification_csv_with_nan_targets(tmp_path, n=70, n_nan=10, seed=0):
+    rng = np.random.default_rng(seed)
+    x1 = rng.normal(size=n)
+    x2 = rng.normal(size=n)
+    y = (x1 + x2 > 0).astype(float)
+    y[:n_nan] = np.nan
+    df = pd.DataFrame({"x1": x1, "x2": x2, "y": y})
+    path = tmp_path / "classification_nan.csv"
+    df.to_csv(path, index=False)
+    return str(path), df
+
+
 def _kwargs(**overrides):
     base = dict(
         complexity="moderate",
@@ -95,10 +107,7 @@ def test_champion_metrics_included_when_provided(tmp_path):
     out = run_challenger(
         csv_path,
         "y",
-        **_kwargs(
-            champion_labels=df["y"].tolist(),
-            champion_predictions=df["y"].tolist(),
-        ),
+        **_kwargs(champion_predictions=df["y"].tolist()),
     )
     assert out["champion_metrics_included"] is True
     assert "champion_metrics" in out["upload_payload"]
@@ -112,20 +121,57 @@ def test_champion_metrics_omitted_when_not_provided(tmp_path):
     assert "champion_metrics" not in out["upload_payload"]
 
 
-def test_mismatched_champion_lengths_raises(tmp_path):
-    csv_path = _classification_csv(tmp_path)
-    with pytest.raises(ValueError, match="same length"):
-        run_challenger(
-            csv_path,
-            "y",
-            **_kwargs(champion_labels=[0, 1], champion_predictions=[0, 1, 1]),
-        )
+def test_champion_predictions_wrong_length_raises(tmp_path):
+    csv_path = _classification_csv(tmp_path)  # 70 rows
+    with pytest.raises(ValueError, match="one entry per row"):
+        run_challenger(csv_path, "y", **_kwargs(champion_predictions=[0, 1, 0]))
 
 
-def test_only_champion_labels_raises(tmp_path):
-    csv_path = _classification_csv(tmp_path)
-    with pytest.raises(ValueError, match="both"):
-        run_challenger(csv_path, "y", **_kwargs(champion_labels=[0, 1]))
+# ---------------------------------------------------------------------------
+# Missing (NaN) target rows
+# ---------------------------------------------------------------------------
+
+def test_nan_targets_are_dropped_and_counted(tmp_path):
+    csv_path, df = _classification_csv_with_nan_targets(tmp_path, n=70, n_nan=10)
+    out = run_challenger(csv_path, "y", **_kwargs())
+    assert out["n_samples_total"] == 70
+    assert out["n_samples_dropped_unlabeled"] == 10
+    assert out["upload_payload"]["n_samples"] == 60
+    assert "10" in out["population_note"]
+
+
+def test_no_nan_targets_reports_zero_dropped(tmp_path):
+    csv_path = _classification_csv(tmp_path, n=70)
+    out = run_challenger(csv_path, "y", **_kwargs())
+    assert out["n_samples_total"] == 70
+    assert out["n_samples_dropped_unlabeled"] == 0
+
+
+def test_all_nan_targets_raises(tmp_path):
+    csv_path, _ = _classification_csv_with_nan_targets(tmp_path, n=20, n_nan=20)
+    with pytest.raises(ValueError, match="missing"):
+        run_challenger(csv_path, "y", **_kwargs())
+
+
+def test_champion_predictions_dropped_from_same_rows_as_challenger(tmp_path):
+    # Champion predictions mirror the (possibly-NaN) target itself, except on
+    # rows that get dropped as unlabeled, where they're deliberately wrong.
+    # If those rows leaked into scoring, champion accuracy would come in
+    # under 1.0 instead of exactly 1.0 — proving the shared-drop guarantee.
+    csv_path, df = _classification_csv_with_nan_targets(tmp_path, n=70, n_nan=10)
+    champion_predictions = [0.0 if pd.isna(v) else v for v in df["y"]]
+
+    out = run_challenger(csv_path, "y", **_kwargs(champion_predictions=champion_predictions))
+
+    assert out["upload_payload"]["champion_metrics"]["accuracy"] == 1.0
+
+
+def test_population_note_in_upload_payload(tmp_path):
+    csv_path, _ = _classification_csv_with_nan_targets(tmp_path, n=70, n_nan=10)
+    out = run_challenger(csv_path, "y", **_kwargs())
+    assert out["upload_payload"]["population_note"] == out["population_note"]
+    assert out["upload_payload"]["n_samples_total"] == 70
+    assert out["upload_payload"]["n_samples_dropped_unlabeled"] == 10
 
 
 # ---------------------------------------------------------------------------
@@ -153,9 +199,6 @@ def test_upload_payload_is_json_serializable(tmp_path):
     out = run_challenger(
         csv_path,
         "y",
-        **_kwargs(
-            champion_labels=[0, 1] * 35,
-            champion_predictions=[0, 1] * 35,
-        ),
+        **_kwargs(champion_predictions=[0, 1] * 35),
     )
     json.dumps(out)

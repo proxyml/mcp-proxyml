@@ -36,7 +36,7 @@ dev = [
     "pytest>=8.0.0",
 ]
 challenger = [
-    "proxyml[local]>=0.5.0",
+    "proxyml[local]>=0.6.0",
 ]
 
 [tool.pytest.ini_options]

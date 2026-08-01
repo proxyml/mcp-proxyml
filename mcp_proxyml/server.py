@@ -78,7 +78,6 @@ async def proxyml_train_challenger(
     test_size: float = 0.2,
     immutable_cols: list[str] | None = None,
     feature_names: list[str] | None = None,
-    champion_labels: list | None = None,
     champion_predictions: list | None = None,
 ) -> dict:
     """Train a local challenger model on a CSV file and assemble an upload-ready payload.
@@ -87,10 +86,23 @@ async def proxyml_train_challenger(
     'challenger' extra: pip install 'mcp-proxyml[challenger]'.
     complexity is one of 'simple', 'moderate', 'flexible'; task is
     'classification', 'regression', or 'auto' to infer from target_col.
-    Pass champion_labels and champion_predictions together to also score a
-    champion model and include champion_metrics in the returned payload —
-    the upload endpoint requires champion_metrics, so omit them only if you
-    plan to fill them in later (see proxyml_score_champion).
+
+    Rows with a missing target_col value are dropped before training, the
+    CV split, and champion scoring — never silently included. The response
+    reports n_samples_total, n_samples_dropped_unlabeled, and a
+    population_note that is also embedded in upload_payload, so the
+    dropped-row count and scope limitation travel with the upload for an
+    auditor to see.
+
+    Pass champion_predictions — one prediction per row of the CSV, same
+    order — to also score a champion model against the same target_col and
+    include champion_metrics in the returned payload; the identical rows
+    dropped for a missing target are dropped from champion_predictions too,
+    so the champion and challenger are always evaluated on the same
+    population. The upload endpoint requires champion_metrics, so omit
+    champion_predictions only if you plan to fill it in later (see
+    proxyml_score_champion).
+
     Returns upload_payload: save it and upload via the ProxyML dashboard's
     "Upload challenger" button, or POST it yourself to
     /app/projects/{project_id}/challenger.
@@ -106,7 +118,6 @@ async def proxyml_train_challenger(
             test_size=test_size,
             immutable_cols=immutable_cols,
             feature_names=feature_names,
-            champion_labels=champion_labels,
             champion_predictions=champion_predictions,
         )
     except ImportError:
