@@ -54,6 +54,19 @@ pip install mcp-proxyml
 PROXYML_API_KEY=your-key mcp-proxyml
 ```
 
+### Local challenger training (optional)
+
+`proxyml_train_challenger` and `proxyml_score_champion` train a small model
+locally via the `proxyml` SDK and require the `challenger` extra, which
+pulls in scikit-learn and scipy:
+
+```bash
+pip install 'mcp-proxyml[challenger]'
+```
+
+Without it, those two tools return a clear error telling you to install the
+extra rather than failing to start the server.
+
 ## Environment variables
 
 | Variable | Required | Description |
@@ -64,8 +77,9 @@ PROXYML_API_KEY=your-key mcp-proxyml
 
 ### What this server can access
 
-**Filesystem** — `proxyml_infer_schema` reads one CSV file at the path you
-provide. No other tool reads or writes local files.
+**Filesystem** — `proxyml_infer_schema` and `proxyml_train_challenger` each
+read one CSV file at the path you provide. No other tool reads or writes
+local files.
 
 **Network** — outbound HTTPS only, to `https://api.proxyml.ai` (or the URL
 set in `PROXYML_BASE_URL`). No other hosts are contacted.
@@ -80,6 +94,8 @@ No other environment variables are accessed.
 | Tool | What is transmitted |
 |---|---|
 | `proxyml_infer_schema` | Nothing — CSV is read and processed locally only |
+| `proxyml_train_challenger` | Nothing — training happens entirely locally; the returned payload is only sent if you choose to upload it yourself |
+| `proxyml_score_champion` | Nothing — scoring happens entirely locally |
 | `proxyml_put_schema` | Feature schema: column names, types, and constraints |
 | `proxyml_get_schema` | Schema name (string) |
 | `proxyml_synthesize_data` | Schema name, sample count, and optionally one feature vector |
@@ -100,6 +116,13 @@ transmitted.
 If you use `proxyml_explain_local`, `proxyml_predict_batch`, or
 `proxyml_find_counterfactual` with real data points rather than synthetic
 ones, those feature vectors will be sent to the ProxyML API.
+
+`proxyml_train_challenger` and `proxyml_score_champion` never call the
+ProxyML API at all — they run the SDK's local training/scoring code
+in-process and hand back a JSON payload. This server does not upload that
+payload for you; save it and use the ProxyML dashboard's "Upload
+challenger" button, or POST it yourself to
+`/app/projects/{project_id}/challenger`.
 
 ### Authentication
 
@@ -125,6 +148,15 @@ logged or written to disk by this server.
 | `proxyml_train_surrogate` | Train a linear surrogate on samples scored by your model |
 | `proxyml_list_surrogates` | List trained surrogate models, newest first |
 | `proxyml_predict_batch` | Get surrogate predictions for a list of instances |
+
+### Local challenger training
+
+Requires the `challenger` extra (`pip install 'mcp-proxyml[challenger]'`).
+
+| Tool | Description |
+|---|---|
+| `proxyml_train_challenger` | Train a challenger model locally on a CSV and assemble an upload-ready payload |
+| `proxyml_score_champion` | Score a champion model's predictions locally, for an apples-to-apples comparison |
 
 ### Explainability
 

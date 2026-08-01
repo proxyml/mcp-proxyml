@@ -35,6 +35,9 @@ mcp-proxyml = "mcp_proxyml.server:main"
 dev = [
     "pytest>=8.0.0",
 ]
+challenger = [
+    "proxyml[local]>=0.5.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -6,6 +6,7 @@ import httpx
 import pandas as pd
 from mcp.server.fastmcp import FastMCP
 
+from mcp_proxyml.challenger import run_challenger
 from mcp_proxyml.drift import interpret_diff
 from mcp_proxyml.schema import infer_schema
 
@@ -62,6 +63,108 @@ async def proxyml_infer_schema(
         return {"error": True, "detail": f"File not found or not a file: {csv_path}"}
     df = pd.read_csv(csv_path)
     return infer_schema(df, immutable_cols)
+
+
+# ---------------------------------------------------------------------------
+# Challenger tools (local, no API call)
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+async def proxyml_train_challenger(
+    csv_path: str,
+    target_col: str,
+    complexity: str = "moderate",
+    task: str = "auto",
+    test_size: float = 0.2,
+    immutable_cols: list[str] | None = None,
+    feature_names: list[str] | None = None,
+    champion_labels: list | None = None,
+    champion_predictions: list | None = None,
+) -> dict:
+    """Train a local challenger model on a CSV file and assemble an upload-ready payload.
+
+    Trains entirely locally — no data leaves this process. Requires the
+    'challenger' extra: pip install 'mcp-proxyml[challenger]'.
+    complexity is one of 'simple', 'moderate', 'flexible'; task is
+    'classification', 'regression', or 'auto' to infer from target_col.
+    Pass champion_labels and champion_predictions together to also score a
+    champion model and include champion_metrics in the returned payload —
+    the upload endpoint requires champion_metrics, so omit them only if you
+    plan to fill them in later (see proxyml_score_champion).
+    Returns upload_payload: save it and upload via the ProxyML dashboard's
+    "Upload challenger" button, or POST it yourself to
+    /app/projects/{project_id}/challenger.
+    """
+    if not os.path.isfile(csv_path):
+        return {"error": True, "detail": f"File not found or not a file: {csv_path}"}
+    try:
+        return run_challenger(
+            csv_path,
+            target_col,
+            complexity=complexity,
+            task=task,
+            test_size=test_size,
+            immutable_cols=immutable_cols,
+            feature_names=feature_names,
+            champion_labels=champion_labels,
+            champion_predictions=champion_predictions,
+        )
+    except ImportError:
+        return {
+            "error": True,
+            "detail": (
+                "Local challenger training requires the 'challenger' extra: "
+                "pip install 'mcp-proxyml[challenger]'"
+            ),
+        }
+    except ValueError as exc:
+        return {"error": True, "detail": str(exc)}
+    except Exception as exc:
+        logger.exception("proxyml_train_challenger failed")
+        return {"error": True, "detail": str(exc)}
+
+
+@mcp.tool()
+async def proxyml_score_champion(
+    labels: list,
+    predictions: list,
+    task: str,
+) -> dict:
+    """Score a champion model's predictions against real labels, locally.
+
+    task must be 'classification' or 'regression' (no 'auto' — pass the same
+    task a paired challenger resolved to, so the two stay comparable).
+    Returns {"f1":..., "accuracy":...} for classification or {"r2":...} for
+    regression. Requires the 'challenger' extra:
+    pip install 'mcp-proxyml[challenger]'.
+    """
+    if task not in ("classification", "regression"):
+        return {
+            "error": True,
+            "detail": f"Invalid task {task!r}; must be 'classification' or 'regression'",
+        }
+    if len(labels) != len(predictions):
+        return {
+            "error": True,
+            "detail": (
+                f"labels and predictions must be the same length "
+                f"(got {len(labels)} and {len(predictions)})"
+            ),
+        }
+    try:
+        from proxyml.local import score_champion
+        return score_champion(labels, predictions, task=task)
+    except ImportError:
+        return {
+            "error": True,
+            "detail": (
+                "Local challenger training requires the 'challenger' extra: "
+                "pip install 'mcp-proxyml[challenger]'"
+            ),
+        }
+    except Exception as exc:
+        logger.exception("proxyml_score_champion failed")
+        return {"error": True, "detail": str(exc)}
 
 
 # ---------------------------------------------------------------------------
