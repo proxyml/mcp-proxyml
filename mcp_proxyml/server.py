@@ -99,9 +99,13 @@ async def proxyml_train_challenger(
     include champion_metrics in the returned payload; the identical rows
     dropped for a missing target are dropped from champion_predictions too,
     so the champion and challenger are always evaluated on the same
-    population. The upload endpoint requires champion_metrics, so omit
-    champion_predictions only if you plan to fill it in later (see
-    proxyml_score_champion).
+    population, and upload_payload's challenger_data_fingerprint and
+    champion_data_fingerprint are set to matching values automatically. The
+    upload endpoint requires champion_metrics, so omit champion_predictions
+    only if you plan to fill it in later via proxyml_score_champion — in
+    that case, copy its data_fingerprint into upload_payload as
+    champion_data_fingerprint before uploading, so the endpoint can still
+    catch the two having been scored on different data.
 
     Returns upload_payload: save it and upload via the ProxyML dashboard's
     "Upload challenger" button, or POST it yourself to
@@ -145,9 +149,19 @@ async def proxyml_score_champion(
 
     task must be 'classification' or 'regression' (no 'auto' — pass the same
     task a paired challenger resolved to, so the two stay comparable).
-    Returns {"f1":..., "accuracy":...} for classification or {"r2":...} for
-    regression. Requires the 'challenger' extra:
-    pip install 'mcp-proxyml[challenger]'.
+    Returns {"f1":..., "accuracy":..., "data_fingerprint":...} for
+    classification or {"r2":..., "data_fingerprint":...} for regression.
+    Requires the 'challenger' extra: pip install 'mcp-proxyml[challenger]'.
+
+    data_fingerprint is a hash of `labels` — since this tool call has no
+    connection to any proxyml_train_challenger() call that ran separately,
+    there's nothing here to guarantee the two were scored on the same data.
+    If you're merging this result's metrics into a proxyml_train_challenger
+    upload_payload by hand as champion_metrics, also copy this
+    data_fingerprint in as champion_data_fingerprint — the upload endpoint
+    rejects the upload if it doesn't match the challenger's own fingerprint,
+    catching an accidental mismatched file (e.g. the wrong CSV) instead of
+    silently producing a misleading comparison.
     """
     if task not in ("classification", "regression"):
         return {
@@ -163,8 +177,9 @@ async def proxyml_score_champion(
             ),
         }
     try:
-        from proxyml.local import score_champion
-        return score_champion(labels, predictions, task=task)
+        from proxyml.local import fingerprint_labels, score_champion
+        metrics = score_champion(labels, predictions, task=task)
+        return {**metrics, "data_fingerprint": fingerprint_labels(labels)}
     except ImportError:
         return {
             "error": True,

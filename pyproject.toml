@@ -1,6 +1,6 @@
 [project]
 name = "mcp-proxyml"
-version = "0.1.6"
+version = "0.1.7"
 description = "MCP server for the ProxyML API"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -36,7 +36,7 @@ dev = [
     "pytest>=8.0.0",
 ]
 challenger = [
-    "proxyml[local]>=0.6.0",
+    "proxyml[local]>=0.8.0",
 ]
 
 [tool.pytest.ini_options]
