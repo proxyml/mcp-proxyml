@@ -139,6 +139,8 @@ logged or written to disk by this server.
 | `proxyml_infer_schema` | Infer a feature schema from a local CSV file — no data sent to the server |
 | `proxyml_get_schema` | Retrieve a stored schema by name |
 | `proxyml_put_schema` | Upload or replace a feature schema |
+| `proxyml_list_schemas` | List all named feature schemas for the authenticated account |
+| `proxyml_delete_schema` | Delete a named feature schema |
 
 ### Training
 
@@ -147,6 +149,10 @@ logged or written to disk by this server.
 | `proxyml_synthesize_data` | Generate synthetic samples from the stored schema |
 | `proxyml_train_surrogate` | Train a linear surrogate on samples scored by your model |
 | `proxyml_list_surrogates` | List trained surrogate models, newest first |
+| `proxyml_get_model_schema` | Retrieve the feature schema snapshotted when a surrogate was trained |
+| `proxyml_update_surrogate` | Rename or annotate a surrogate without retraining |
+| `proxyml_delete_surrogate` | Delete a surrogate model by its UUID |
+| `proxyml_predict` | Get a surrogate prediction for a single instance |
 | `proxyml_predict_batch` | Get surrogate predictions for a list of instances |
 
 ### Local challenger training
@@ -167,6 +173,7 @@ Requires the `challenger` extra (`pip install 'mcp-proxyml[challenger]'`).
 | `proxyml_explain_local` | Per-feature contribution breakdown for a single instance |
 | `proxyml_explain_local_batch` | Per-feature contributions for multiple instances in one call |
 | `proxyml_find_counterfactual` | Find the nearest point that flips the prediction |
+| `proxyml_find_counterfactuals` | Batch version of `proxyml_find_counterfactual` for multiple instances |
 | `proxyml_diff_models` | Compare feature importances between two surrogate versions |
 
 ### CI/CD
@@ -180,6 +187,12 @@ Requires the `challenger` extra (`pip install 'mcp-proxyml[challenger]'`).
 | Tool | Description |
 |---|---|
 | `proxyml_get_usage` | Current tier, request count, and quota — useful as a pre-flight check |
+
+### Diagnostics
+
+| Tool | Description |
+|---|---|
+| `proxyml_health_check` | Check API connectivity — no authentication required, doesn't count against usage quota |
 
 ## Typical workflow
 
