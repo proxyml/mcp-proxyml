@@ -9,6 +9,23 @@ Backfilled from git history 2026-09-06 — this project had no changelog until
 now, so entries before that date are reconstructed from commit messages
 rather than written at release time.
 
+## [0.1.8] - 2026-11-23
+
+### Added
+- `proxyml_upload_challenger` and `proxyml_get_challenger_summary`: wrap
+  alposit's `/ci/challenger` and `/ci/challenger/summary` (the same
+  endpoints proxyml 0.10.0's `upload_challenger()`/`get_challenger_summary()`
+  use), so a `proxyml_train_challenger` payload can be uploaded and its
+  result read back without leaving MCP. They authenticate with a
+  project-scoped CI token (`ci_token` argument or `PROXYML_CI_TOKEN`) sent
+  as `X-CI-Token`; the account-wide `PROXYML_API_KEY` is deliberately not
+  sent. Neither needs the `challenger` extra or the proxyml SDK.
+
+### Fixed
+- Capped the `mcp` dependency at `<2`. This server uses
+  `mcp.server.fastmcp.FastMCP`, which mcp 2.x renamed, so an unpinned fresh
+  install failed on import with `No module named 'mcp.server.fastmcp'`.
+
 ## [0.1.7] - 2026-08-02
 
 ### Added

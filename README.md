@@ -72,6 +72,7 @@ extra rather than failing to start the server.
 | Variable | Required | Description |
 |---|---|---|
 | `PROXYML_API_KEY` | Yes | Your ProxyML API key |
+| `PROXYML_CI_TOKEN` | No | Project-scoped CI token, used only by `proxyml_upload_challenger` and `proxyml_get_challenger_summary` (or pass `ci_token=` per call) |
 
 ## Security & permissions
 
@@ -84,7 +85,7 @@ local files.
 **Network** — outbound HTTPS only, to `https://api.proxyml.ai` (or the URL
 set in `PROXYML_BASE_URL`). No other hosts are contacted.
 
-**Environment** — only `PROXYML_API_KEY` and `PROXYML_BASE_URL` are read.
+**Environment** — only `PROXYML_API_KEY`, `PROXYML_CI_TOKEN`, and `PROXYML_BASE_URL` are read.
 No other environment variables are accessed.
 
 **No shell execution, no local ports, no other system resources.**
@@ -96,6 +97,8 @@ No other environment variables are accessed.
 | `proxyml_infer_schema` | Nothing — CSV is read and processed locally only |
 | `proxyml_train_challenger` | Nothing — training happens entirely locally; the returned payload is only sent if you choose to upload it yourself |
 | `proxyml_score_champion` | Nothing — scoring happens entirely locally |
+| `proxyml_upload_challenger` | The challenger upload payload you pass in: metrics, feature importances, and data fingerprints (hashes) — no raw rows |
+| `proxyml_get_challenger_summary` | Nothing beyond the CI token — fetches the latest comparison summary |
 | `proxyml_put_schema` | Feature schema: column names, types, and constraints |
 | `proxyml_get_schema` | Schema name (string) |
 | `proxyml_synthesize_data` | Schema name, sample count, and optionally one feature vector |
@@ -120,15 +123,22 @@ ones, those feature vectors will be sent to the ProxyML API.
 `proxyml_train_challenger` and `proxyml_score_champion` never call the
 ProxyML API at all — they run the SDK's local training/scoring code
 in-process and hand back a JSON payload. This server does not upload that
-payload for you; save it and use the ProxyML dashboard's "Upload
-challenger" button, or POST it yourself to
-`/app/projects/{project_id}/challenger`.
+payload for you. To upload it, call `proxyml_upload_challenger` (needs a
+project CI token), or use the ProxyML dashboard's "Upload challenger"
+button, or POST it yourself to `/app/projects/{project_id}/challenger`.
+Uploading is always an explicit, separate step.
 
 ### Authentication
 
 Your API key is sent on every request as an `X-API-KEY` HTTP header over TLS.
 It is read from the `PROXYML_API_KEY` environment variable and is never
 logged or written to disk by this server.
+
+`proxyml_upload_challenger` and `proxyml_get_challenger_summary` instead send
+a project-scoped CI token as an `X-CI-Token` header (from `ci_token` or
+`PROXYML_CI_TOKEN`) and do **not** send your API key. A CI token can only
+write to the one project it was minted for, so it is the safer credential to
+hand a CI job.
 
 ## Tools
 
@@ -163,6 +173,15 @@ Requires the `challenger` extra (`pip install 'mcp-proxyml[challenger]'`).
 |---|---|
 | `proxyml_train_challenger` | Train a challenger model locally on a CSV and assemble an upload-ready payload |
 | `proxyml_score_champion` | Score a champion model's predictions locally, for an apples-to-apples comparison |
+
+### Challenger upload (CI)
+
+Authenticated with a project-scoped CI token (`PROXYML_CI_TOKEN`), not your API key. Requires a ProxyML server with `/ci/challenger` (alposit 0.2.0+). These two tools don't need the `challenger` extra.
+
+| Tool | Description |
+|---|---|
+| `proxyml_upload_challenger` | Upload a `proxyml_train_challenger` payload to the project the CI token belongs to |
+| `proxyml_get_challenger_summary` | Fetch the latest comparison's winner, primary metric, delta, and a ready-to-post markdown snippet |
 
 ### Explainability
 

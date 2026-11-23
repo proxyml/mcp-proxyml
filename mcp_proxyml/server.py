@@ -32,6 +32,25 @@ def _client() -> httpx.AsyncClient:
     )
 
 
+def _ci_client(ci_token: str | None = None) -> httpx.AsyncClient:
+    """Client authenticated with a project-scoped CI token (X-CI-Token).
+
+    Deliberately does NOT send the account-wide X-API-KEY: a CI token only
+    authorizes writes to the one project it was minted for.
+    """
+    token = ci_token or os.environ.get("PROXYML_CI_TOKEN", "")
+    if not token:
+        raise RuntimeError(
+            "No CI token. Pass ci_token or set PROXYML_CI_TOKEN "
+            "(mint one from the project's page in the ProxyML dashboard)."
+        )
+    return httpx.AsyncClient(
+        base_url=os.environ.get("PROXYML_BASE_URL", _DEFAULT_BASE_URL),
+        headers={"X-CI-Token": token, "Content-Type": "application/json"},
+        timeout=_TIMEOUT,
+    )
+
+
 def _result(r: httpx.Response) -> dict:
     """Return the JSON body on success, or a structured error dict on failure."""
     if r.is_success:
@@ -107,9 +126,9 @@ async def proxyml_train_challenger(
     champion_data_fingerprint before uploading, so the endpoint can still
     catch the two having been scored on different data.
 
-    Returns upload_payload: save it and upload via the ProxyML dashboard's
-    "Upload challenger" button, or POST it yourself to
-    /app/projects/{project_id}/challenger.
+    Returns upload_payload: upload it with proxyml_upload_challenger (needs a
+    project CI token), via the ProxyML dashboard's "Upload challenger"
+    button, or POST it yourself to /app/projects/{project_id}/challenger.
     """
     if not os.path.isfile(csv_path):
         return {"error": True, "detail": f"File not found or not a file: {csv_path}"}
@@ -191,6 +210,51 @@ async def proxyml_score_champion(
     except Exception as exc:
         logger.exception("proxyml_score_champion failed")
         return {"error": True, "detail": str(exc)}
+
+
+# ---------------------------------------------------------------------------
+# CI challenger tools (project-scoped CI token, not the account API key)
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+async def proxyml_upload_challenger(
+    upload_payload: dict,
+    ci_token: str | None = None,
+) -> dict:
+    """Upload a challenger comparison to a ProxyML project using a CI token.
+
+    upload_payload is the upload_payload from proxyml_train_challenger (with
+    champion_metrics filled in). Authenticates with a project-scoped CI token
+    — passed as ci_token or read from PROXYML_CI_TOKEN — instead of
+    PROXYML_API_KEY; the token authorizes writes to exactly one project.
+    Mint it from that project's page in the ProxyML dashboard. Returns the
+    new challenger_version. Requires a ProxyML server with /ci/challenger
+    (alposit 0.2.0+).
+    """
+    try:
+        client = _ci_client(ci_token)
+    except RuntimeError as exc:
+        return {"error": True, "detail": str(exc)}
+    async with client as c:
+        r = await c.post("/ci/challenger", content=json.dumps(upload_payload))
+        return _result(r)
+
+
+@mcp.tool()
+async def proxyml_get_challenger_summary(ci_token: str | None = None) -> dict:
+    """Fetch a CI-ready summary of a project's latest challenger comparison.
+
+    Returns the winner, primary metric and delta, and a ready-to-post
+    markdown snippet. The project is determined by the CI token (ci_token or
+    PROXYML_CI_TOKEN). Errors if nothing has been uploaded to the project yet.
+    """
+    try:
+        client = _ci_client(ci_token)
+    except RuntimeError as exc:
+        return {"error": True, "detail": str(exc)}
+    async with client as c:
+        r = await c.get("/ci/challenger/summary")
+        return _result(r)
 
 
 # ---------------------------------------------------------------------------
