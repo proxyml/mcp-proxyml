@@ -9,6 +9,15 @@ Backfilled from git history 2026-09-06 — this project had no changelog until
 now, so entries before that date are reconstructed from commit messages
 rather than written at release time.
 
+## [0.1.9] - 2026-11-24
+
+### Added
+- `proxyml_check_data_drift`, `proxyml_list_data_drift_checks` and
+  `proxyml_get_data_drift_check`: wrap alposit's
+  `/surrogate/{model_id}/data-drift` endpoints (alposit 0.3.0+). The CSV is
+  summarized locally and only statistics plus the row count are sent. Not to
+  be confused with `proxyml_detect_drift`, which compares two model versions.
+
 ## [0.1.8] - 2026-11-23
 
 ### Added

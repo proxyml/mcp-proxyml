@@ -258,6 +258,82 @@ async def proxyml_get_challenger_summary(ci_token: str | None = None) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# Data drift (recent data vs. a model's training data)
+# ---------------------------------------------------------------------------
+
+@mcp.tool()
+async def proxyml_check_data_drift(
+    model_id: str,
+    csv_path: str,
+    label: str | None = None,
+    thresholds: dict | None = None,
+    baseline_n_samples: int | None = None,
+) -> dict:
+    """Check whether recent data has drifted from the data a model was trained on.
+
+    Not the same as proxyml_detect_drift, which compares two model versions.
+    This compares a local CSV of recent data against the model's stored
+    training schema. The CSV is summarized locally; only statistics (means,
+    standard deviations, category names with frequencies, count rates) and the
+    row count are sent, never rows. Features are compared one at a time;
+    changes in relationships between features are not detected. The verdict is
+    stored (last 100 per model).
+
+    csv_path: recent data with the same columns as the training data.
+    label: free-text tag stored with the check (a date, commit SHA, ...).
+    thresholds: optional overrides, any of mean_shift (default 0.2, in baseline
+        standard deviations), std_ratio (1.4), category_tvd (0.08),
+        count_rel_change (0.2), new_category_mass (0.02), noise_sigmas (auto),
+        min_samples (100). A feature is flagged only when a metric exceeds its
+        threshold AND a sampling-noise allowance, so lowering a threshold below
+        the allowance has no effect; lowering noise_sigmas raises sensitivity
+        and false alarms.
+    baseline_n_samples: rows the model's training schema was computed from, if
+        known. Strongly recommended when the training set was small (a few
+        hundred rows), otherwise false alarms are noticeably more frequent.
+
+    Returns status ("pass" | "drift" | "insufficient_sample"), passed, summary
+    counts, and per-feature findings with reasons. Drift is a normal result,
+    not an error. Columns whose inferred type differs from the schema's (e.g.
+    hand-tuned ordinal features) show up as type_changed.
+    """
+    if not os.path.isfile(csv_path):
+        return {"error": True, "detail": f"File not found or not a file: {csv_path}"}
+    df = pd.read_csv(csv_path)
+    if len(df) == 0:
+        return {"error": True, "detail": "CSV has no rows"}
+    payload: dict = {"n_samples": int(len(df)), "features": infer_schema(df)["features"]}
+    if label is not None:
+        payload["label"] = label
+    if thresholds:
+        payload["thresholds"] = thresholds
+    if baseline_n_samples is not None:
+        payload["baseline_n_samples"] = baseline_n_samples
+    async with _client() as c:
+        r = await c.post(f"/surrogate/{model_id}/data-drift", content=json.dumps(payload))
+        return _result(r)
+
+
+@mcp.tool()
+async def proxyml_list_data_drift_checks(model_id: str, limit: int = 20) -> dict:
+    """List a model's recent data drift verdicts, newest first (summaries only).
+
+    Use proxyml_get_data_drift_check for one verdict's per-feature findings.
+    """
+    async with _client() as c:
+        r = await c.get(f"/surrogate/{model_id}/data-drift", params={"limit": limit})
+        return _result(r)
+
+
+@mcp.tool()
+async def proxyml_get_data_drift_check(model_id: str, snapshot_id: str) -> dict:
+    """Fetch one stored data drift verdict, including per-feature findings."""
+    async with _client() as c:
+        r = await c.get(f"/surrogate/{model_id}/data-drift/{snapshot_id}")
+        return _result(r)
+
+
+# ---------------------------------------------------------------------------
 # Schema tools
 # ---------------------------------------------------------------------------
 

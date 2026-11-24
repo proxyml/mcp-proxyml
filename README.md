@@ -99,6 +99,8 @@ No other environment variables are accessed.
 | `proxyml_score_champion` | Nothing — scoring happens entirely locally |
 | `proxyml_upload_challenger` | The challenger upload payload you pass in: metrics, feature importances, and data fingerprints (hashes) — no raw rows |
 | `proxyml_get_challenger_summary` | Nothing beyond the CI token — fetches the latest comparison summary |
+| `proxyml_check_data_drift` | Summary statistics of your CSV (means, standard deviations, category names with frequencies, count rates) and its row count — computed locally, no rows |
+| `proxyml_list_data_drift_checks` / `proxyml_get_data_drift_check` | Model ID, snapshot ID, limit |
 | `proxyml_put_schema` | Feature schema: column names, types, and constraints |
 | `proxyml_get_schema` | Schema name (string) |
 | `proxyml_synthesize_data` | Schema name, sample count, and optionally one feature vector |
@@ -182,6 +184,16 @@ Authenticated with a project-scoped CI token (`PROXYML_CI_TOKEN`), not your API 
 |---|---|
 | `proxyml_upload_challenger` | Upload a `proxyml_train_challenger` payload to the project the CI token belongs to |
 | `proxyml_get_challenger_summary` | Fetch the latest comparison's winner, primary metric, delta, and a ready-to-post markdown snippet |
+
+### Data drift
+
+Compares a CSV of recent data against the data a model was trained on (requires alposit 0.3.0+). Not the same as `proxyml_detect_drift`, which compares two model versions. Features are checked one at a time; changes in relationships between features are not detected.
+
+| Tool | Description |
+|---|---|
+| `proxyml_check_data_drift` | Summarize a local CSV and return a pass / drift / insufficient_sample verdict with per-feature findings; thresholds are tunable per call |
+| `proxyml_list_data_drift_checks` | Recent verdicts for a model, newest first (last 100 are kept) |
+| `proxyml_get_data_drift_check` | One stored verdict with its per-feature findings |
 
 ### Explainability
 
