@@ -188,3 +188,25 @@ def test_list_and_get_data_drift_checks(monkeypatch):
     assert asyncio.run(proxyml_get_data_drift_check("m1", "s1")) == {"ok": 1}
     assert seen[0][0].endswith("/surrogate/m1/data-drift") and seen[0][1] == {"limit": "5"}
     assert seen[1][0].endswith("/surrogate/m1/data-drift/s1")
+
+
+def test_infer_schema_reports_row_count_and_put_schema_forwards_it(monkeypatch, tmp_path):
+    import json
+
+    from mcp_proxyml.server import proxyml_infer_schema, proxyml_put_schema
+
+    csv = tmp_path / "t.csv"
+    csv.write_text("a,b\n1.5,x\n2.5,y\n3.5,x\n")
+    schema = asyncio.run(proxyml_infer_schema(str(csv)))
+    assert schema["n_samples"] == 3
+
+    seen = {}
+
+    def handler(request):
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"features": []})
+
+    monkeypatch.setenv("PROXYML_API_KEY", "k")
+    _mock_ci(monkeypatch, handler)
+    asyncio.run(proxyml_put_schema(schema, "s"))
+    assert seen["body"]["n_samples"] == 3

@@ -74,7 +74,9 @@ async def proxyml_infer_schema(
     """Infer a ProxyML feature schema from a local CSV file.
 
     Reads the file locally — no data is sent to the ProxyML server.
-    Returns a schema dict ready to pass to proxyml_put_schema.
+    Returns a schema dict ready to pass to proxyml_put_schema. It includes
+    n_samples (the CSV's row count); keep it when uploading so data-drift checks
+    can allow for small training sets.
     Integer columns default to 'count'; consider 'categorical_ordinal' for
     ordered categories like ratings or education level.
     """
@@ -347,7 +349,11 @@ async def proxyml_get_schema(schema_name: str) -> dict:
 
 @mcp.tool()
 async def proxyml_put_schema(schema: dict, schema_name: str) -> dict:
-    """Upload or replace a feature schema."""
+    """Upload or replace a feature schema.
+
+    An optional top-level n_samples (as returned by proxyml_infer_schema) records
+    how many rows the statistics came from; data-drift checks use it by default.
+    """
     async with _client() as c:
         r = await c.put(f"/schema/{schema_name}", content=json.dumps(schema))
         return _result(r)

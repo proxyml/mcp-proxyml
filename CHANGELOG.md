@@ -9,6 +9,14 @@ Backfilled from git history 2026-09-06 — this project had no changelog until
 now, so entries before that date are reconstructed from commit messages
 rather than written at release time.
 
+## [Unreleased]
+
+### Added
+- `proxyml_infer_schema` returns `n_samples` (the CSV's row count). Passed
+  through `proxyml_put_schema` it is recorded with the schema, and data-drift
+  checks default their baseline size to it (alposit 0.4.0+; older servers
+  ignore it).
+
 ## [0.1.9] - 2026-11-24
 
 ### Added

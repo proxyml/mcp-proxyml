@@ -45,6 +45,9 @@ def infer_schema(df: pd.DataFrame, immutable_cols: list[str] | None = None) -> d
         features.append(feature)
     return {
         "features": features,
+        # Row count the statistics came from. Passed through to proxyml_put_schema,
+        # it lets data-drift checks allow for noisy statistics from small data.
+        "n_samples": int(len(df)),
         "_note": (
             "Auto-generated schema. Review and adjust types as needed. "
             "Integer columns default to count — consider categorical_ordinal "
