@@ -335,6 +335,19 @@ async def proxyml_get_data_drift_check(model_id: str, snapshot_id: str) -> dict:
         return _result(r)
 
 
+@mcp.tool()
+async def proxyml_delete_data_drift_check(model_id: str, snapshot_id: str) -> dict:
+    """Delete one stored data drift verdict, e.g. a test run you don't want in the history.
+
+    Permanent. Use proxyml_list_data_drift_checks to find the snapshot_id.
+    """
+    async with _client() as c:
+        r = await c.delete(f"/surrogate/{model_id}/data-drift/{snapshot_id}")
+        if r.status_code == 204:
+            return {"deleted": True, "model_id": model_id, "snapshot_id": snapshot_id}
+        return _result(r)
+
+
 # ---------------------------------------------------------------------------
 # Schema tools
 # ---------------------------------------------------------------------------

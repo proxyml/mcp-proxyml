@@ -9,6 +9,12 @@ Backfilled from git history 2026-09-06 — this project had no changelog until
 now, so entries before that date are reconstructed from commit messages
 rather than written at release time.
 
+## [Unreleased]
+
+### Added
+- `proxyml_delete_data_drift_check`: delete one stored data drift verdict
+  (alposit 0.5.2+).
+
 ## [0.1.10] - 2026-11-25
 
 ### Added

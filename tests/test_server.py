@@ -6,6 +6,7 @@ import pytest
 from mcp_proxyml import server
 from mcp_proxyml.server import (
     proxyml_check_data_drift,
+    proxyml_delete_data_drift_check,
     proxyml_get_data_drift_check,
     proxyml_list_data_drift_checks,
     proxyml_get_challenger_summary,
@@ -210,3 +211,24 @@ def test_infer_schema_reports_row_count_and_put_schema_forwards_it(monkeypatch, 
     _mock_ci(monkeypatch, handler)
     asyncio.run(proxyml_put_schema(schema, "s"))
     assert seen["body"]["n_samples"] == 3
+
+
+def test_delete_data_drift_check(monkeypatch):
+    seen = {}
+
+    def handler(request):
+        seen["method"], seen["path"] = request.method, request.url.path
+        return httpx.Response(204)
+
+    monkeypatch.setenv("PROXYML_API_KEY", "k")
+    _mock_ci(monkeypatch, handler)
+    assert asyncio.run(proxyml_delete_data_drift_check("m1", "s1")) == {"deleted": True, "model_id": "m1", "snapshot_id": "s1"}
+    assert seen["method"] == "DELETE" and seen["path"].endswith("/surrogate/m1/data-drift/s1")
+
+
+def test_delete_data_drift_check_not_found_returns_error(monkeypatch):
+    monkeypatch.setenv("PROXYML_API_KEY", "k")
+    _mock_ci(monkeypatch, lambda request: httpx.Response(404, json={"detail": "Drift check not found"}))
+    assert asyncio.run(proxyml_delete_data_drift_check("m1", "zz")) == {
+        "error": True, "status_code": 404, "detail": "Drift check not found",
+    }

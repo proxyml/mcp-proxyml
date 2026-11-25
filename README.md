@@ -100,7 +100,7 @@ No other environment variables are accessed.
 | `proxyml_upload_challenger` | The challenger upload payload you pass in: metrics, feature importances, and data fingerprints (hashes) — no raw rows |
 | `proxyml_get_challenger_summary` | Nothing beyond the CI token — fetches the latest comparison summary |
 | `proxyml_check_data_drift` | Summary statistics of your CSV (means, standard deviations, category names with frequencies, count rates) and its row count — computed locally, no rows |
-| `proxyml_list_data_drift_checks` / `proxyml_get_data_drift_check` | Model ID, snapshot ID, limit |
+| `proxyml_list_data_drift_checks` / `proxyml_get_data_drift_check` / `proxyml_delete_data_drift_check` | Model ID, snapshot ID, limit |
 | `proxyml_put_schema` | Feature schema: column names, types, and constraints |
 | `proxyml_get_schema` | Schema name (string) |
 | `proxyml_synthesize_data` | Schema name, sample count, and optionally one feature vector |
@@ -194,6 +194,7 @@ Compares a CSV of recent data against the data a model was trained on (requires 
 | `proxyml_check_data_drift` | Summarize a local CSV and return a pass / drift / insufficient_sample verdict with per-feature findings; thresholds are tunable per call |
 | `proxyml_list_data_drift_checks` | Recent verdicts for a model, newest first (last 100 are kept) |
 | `proxyml_get_data_drift_check` | One stored verdict with its per-feature findings |
+| `proxyml_delete_data_drift_check` | Delete one stored verdict (permanent; needs alposit 0.5.2+) |
 
 ### Explainability
 
