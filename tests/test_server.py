@@ -164,6 +164,62 @@ def test_check_data_drift_sends_statistics_only(monkeypatch, tmp_path):
     assert "1.5" not in json.dumps(body["features"][1])  # no raw values
 
 
+BASELINE_FEATURES = [
+    {"type": "numeric_ordinal", "name": "grade", "categories": [1, 2, 3], "mean": 2.0, "std": 0.8},
+    {"type": "categorical_ordinal", "name": "size", "categories": ["S", "M", "L"], "probabilities": [0.3, 0.4, 0.3]},
+]
+
+
+def _drift_csv(tmp_path):
+    csv = tmp_path / "recent.csv"
+    csv.write_text("grade,size\n1,S\n2,M\n3,M\n2,XL\n")
+    return str(csv)
+
+
+def _routed(seen, schema_response):
+    import json
+
+    def handler(request):
+        if request.method == "GET":
+            seen["gets"].append(request.url.path)
+            return schema_response
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"status": "pass", "passed": True})
+
+    return handler
+
+
+def test_check_data_drift_follows_the_models_types(monkeypatch, tmp_path):
+    seen = {"gets": []}
+    monkeypatch.setenv("PROXYML_API_KEY", "k")
+    _mock_ci(monkeypatch, _routed(seen, httpx.Response(200, json={"features": BASELINE_FEATURES})))
+    asyncio.run(proxyml_check_data_drift("m1", _drift_csv(tmp_path)))
+    assert len(seen["gets"]) == 1 and seen["gets"][0].endswith("/surrogate/models/m1/schema")
+    feats = {f["name"]: f for f in seen["body"]["features"]}
+    assert feats["grade"]["type"] == "numeric_ordinal" and feats["size"]["type"] == "categorical_ordinal"
+    assert feats["size"]["categories"] == ["S", "M", "L", "XL"]
+
+
+@pytest.mark.parametrize("status,body", [(500, {"detail": "boom"}), (200, {"unexpected": 1})])
+def test_check_data_drift_falls_back_when_the_schema_is_unavailable(monkeypatch, tmp_path, status, body):
+    seen = {"gets": []}
+    monkeypatch.setenv("PROXYML_API_KEY", "k")
+    _mock_ci(monkeypatch, _routed(seen, httpx.Response(status, json=body)))
+    result = asyncio.run(proxyml_check_data_drift("m1", _drift_csv(tmp_path)))
+    assert result == {"status": "pass", "passed": True}
+    feats = {f["name"]: f["type"] for f in seen["body"]["features"]}
+    assert feats == {"grade": "count", "size": "categorical"}  # inferred from dtypes, as before
+
+
+def test_check_data_drift_align_to_model_false_skips_the_fetch(monkeypatch, tmp_path):
+    seen = {"gets": []}
+    monkeypatch.setenv("PROXYML_API_KEY", "k")
+    _mock_ci(monkeypatch, _routed(seen, httpx.Response(200, json={"features": BASELINE_FEATURES})))
+    asyncio.run(proxyml_check_data_drift("m1", _drift_csv(tmp_path), align_to_model=False))
+    assert seen["gets"] == []
+    assert {f["name"]: f["type"] for f in seen["body"]["features"]}["grade"] == "count"
+
+
 def test_check_data_drift_missing_file_and_empty_csv(monkeypatch, tmp_path):
     monkeypatch.setenv("PROXYML_API_KEY", "k")
     assert asyncio.run(proxyml_check_data_drift("m1", str(tmp_path / "nope.csv")))["error"] is True
@@ -232,3 +288,20 @@ def test_delete_data_drift_check_not_found_returns_error(monkeypatch):
     assert asyncio.run(proxyml_delete_data_drift_check("m1", "zz")) == {
         "error": True, "status_code": 404, "detail": "Drift check not found",
     }
+
+
+def test_put_schema_forwards_source(monkeypatch):
+    import json
+
+    from mcp_proxyml.server import proxyml_put_schema
+
+    seen = {}
+
+    def handler(request):
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, json={"features": []})
+
+    monkeypatch.setenv("PROXYML_API_KEY", "k")
+    _mock_ci(monkeypatch, handler)
+    asyncio.run(proxyml_put_schema({"features": [], "source": "hand_written"}, "s"))
+    assert seen["body"]["source"] == "hand_written"

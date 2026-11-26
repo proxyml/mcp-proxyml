@@ -9,6 +9,25 @@ Backfilled from git history 2026-09-06 — this project had no changelog until
 now, so entries before that date are reconstructed from commit messages
 rather than written at release time.
 
+## [Unreleased]
+
+## [0.1.12] - 2026-11-26
+
+### Changed
+- `proxyml_check_data_drift` now fetches the model's schema and summarizes the
+  CSV using its column types, so hand-tuned (ordinal) types no longer raise
+  false `type_changed` findings. Values that do not fit the model's type are
+  still reported as a type change. If the schema cannot be fetched it falls
+  back to dtype inference as before. New `align_to_model=False` turns this
+  off. It makes one extra GET per check.
+
+### Added
+- `proxyml_put_schema` documents an optional top-level `source` (`"data"` or
+  `"hand_written"`), recorded with models trained on the schema and reported as
+  `baseline_source` on drift checks (needs a server with schema provenance,
+  alposit 0.6.0+; older servers ignore it). `proxyml_infer_schema` explains
+  when to set it.
+
 ## [0.1.11] - 2026-11-25
 
 ### Added

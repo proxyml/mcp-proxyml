@@ -1,7 +1,7 @@
 import math
 import pandas as pd
 import pytest
-from mcp_proxyml.schema import infer_schema
+from mcp_proxyml.schema import infer_schema, infer_schema_like
 
 
 def _feature(schema: dict, name: str) -> dict:
@@ -140,3 +140,58 @@ def test_mixed_types():
     schema = infer_schema(df)
     types = {f["name"]: f["type"] for f in schema["features"]}
     assert types == {"score": "continuous", "count": "count", "label": "categorical"}
+
+
+# ---------------------------------------------------------------------------
+# infer_schema_like: follow an existing schema's types
+# ---------------------------------------------------------------------------
+
+BASE = [
+    {"type": "numeric_ordinal", "name": "grade", "categories": [1, 2, 3], "mean": 2.0, "std": 0.8},
+    {"type": "categorical_ordinal", "name": "size", "categories": ["S", "M", "L"], "probabilities": [0.3, 0.4, 0.3], "immutable": True},
+    {"type": "count", "name": "visits", "lambda": 3.0, "max": 9},
+    {"type": "continuous", "name": "score", "mean": 0.0, "std": 1.0, "min": -3.0, "max": 3.0},
+    {"type": "categorical", "name": "code", "valid_categories": {"1": 0.5, "2": 0.5}},
+]
+
+
+def test_like_follows_baseline_types_when_values_fit():
+    df = pd.DataFrame({"grade": [1, 2, 3, 2], "size": ["S", "M", "M", "L"], "visits": [1, 2, 3, 4],
+                       "score": [1, 0, 2, -1], "code": [1, 2, 2, 1]})
+    got = infer_schema_like(df, BASE)
+    assert {f["name"]: f["type"] for f in got["features"]} == {
+        "grade": "numeric_ordinal", "size": "categorical_ordinal", "visits": "count",
+        "score": "continuous", "code": "categorical",
+    }
+    assert got["n_samples"] == 4
+    assert _feature(got, "size")["immutable"] is True
+    assert _feature(got, "grade")["categories"] == [1, 2, 3]
+
+
+def test_like_float_column_holding_integers_matches_baseline_keys():
+    df = pd.DataFrame({"grade": [1.0, 2.0, None, 3.0], "visits": [1.0, 2.0, None, 4.0], "code": [1.0, 2.0, None, 2.0]})
+    got = infer_schema_like(df, BASE)
+    assert _feature(got, "grade")["categories"] == [1, 2, 3]
+    assert _feature(got, "visits")["type"] == "count"
+    assert set(_feature(got, "code")["valid_categories"]) == {"1", "2"}  # not "1.0"
+
+
+def test_like_keeps_baseline_order_and_appends_new_categories():
+    f = _feature(infer_schema_like(pd.DataFrame({"size": ["M", "M", "XL", "S"]}), BASE), "size")
+    assert f["categories"] == ["S", "M", "L", "XL"]
+    assert f["probabilities"] == [0.25, 0.5, 0.0, 0.25]
+
+
+def test_like_does_not_mask_values_that_do_not_fit():
+    got = infer_schema_like(pd.DataFrame({
+        "score": ["high", "low", "high"], "visits": [1, -2, 3], "grade": [1.5, 2.5, 3.5],
+    }), BASE)
+    assert _feature(got, "score")["type"] == "categorical"
+    assert _feature(got, "visits")["type"] == "continuous"
+    assert _feature(got, "grade")["type"] == "continuous"
+
+
+def test_like_extra_and_empty_columns():
+    got = infer_schema_like(pd.DataFrame({"brand_new": [1.5, 2.5], "grade": [None, None]}), BASE)
+    assert _feature(got, "brand_new")["type"] == "continuous"
+    assert all(f["name"] != "grade" for f in got["features"])  # left out: the server reports it removed

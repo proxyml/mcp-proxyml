@@ -8,7 +8,7 @@ from mcp.server.fastmcp import FastMCP
 
 from mcp_proxyml.challenger import run_challenger
 from mcp_proxyml.drift import interpret_diff
-from mcp_proxyml.schema import infer_schema
+from mcp_proxyml.schema import infer_schema, infer_schema_like
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,9 @@ async def proxyml_infer_schema(
     Reads the file locally — no data is sent to the ProxyML server.
     Returns a schema dict ready to pass to proxyml_put_schema. It includes
     n_samples (the CSV's row count); keep it when uploading so data-drift checks
-    can allow for small training sets.
+    can allow for small training sets. If you upload the schema unedited, also add
+    "source": "data"; if you changed types or statistics by hand, "hand_written".
+    It is reported as baseline_source on drift checks (unknown if left out).
     Integer columns default to 'count'; consider 'categorical_ordinal' for
     ordered categories like ratings or education level.
     """
@@ -263,6 +265,17 @@ async def proxyml_get_challenger_summary(ci_token: str | None = None) -> dict:
 # Data drift (recent data vs. a model's training data)
 # ---------------------------------------------------------------------------
 
+async def _baseline_features(model_id: str) -> list[dict] | None:
+    """The model's schema features, or None (quietly) if they cannot be fetched."""
+    try:
+        async with _client() as c:
+            r = await c.get(f"/surrogate/models/{model_id}/schema")
+        features = r.json().get("features") if r.is_success else None
+        return features if isinstance(features, list) else None
+    except Exception:  # a failed lookup must never fail the drift check itself
+        return None
+
+
 @mcp.tool()
 async def proxyml_check_data_drift(
     model_id: str,
@@ -270,6 +283,7 @@ async def proxyml_check_data_drift(
     label: str | None = None,
     thresholds: dict | None = None,
     baseline_n_samples: int | None = None,
+    align_to_model: bool = True,
 ) -> dict:
     """Check whether recent data has drifted from the data a model was trained on.
 
@@ -293,18 +307,26 @@ async def proxyml_check_data_drift(
     baseline_n_samples: rows the model's training schema was computed from, if
         known. Strongly recommended when the training set was small (a few
         hundred rows), otherwise false alarms are noticeably more frequent.
+    align_to_model: summarize each column as the type the model's schema gives it
+        (ordinal, count, ...) when its values fit, so hand-tuned types do not
+        raise false type_changed findings. Values that do not fit are reported
+        as a type change. Costs one extra request; if the schema cannot be
+        fetched the check proceeds with types inferred from the CSV. Default True.
 
     Returns status ("pass" | "drift" | "insufficient_sample"), passed, summary
     counts, and per-feature findings with reasons. Drift is a normal result,
-    not an error. Columns whose inferred type differs from the schema's (e.g.
-    hand-tuned ordinal features) show up as type_changed.
+    not an error. A column whose values no longer fit the type the model was
+    trained with shows up as type_changed. baseline_source says how the model's
+    schema was produced when it was uploaded: "data", "hand_written" or "unknown".
     """
     if not os.path.isfile(csv_path):
         return {"error": True, "detail": f"File not found or not a file: {csv_path}"}
     df = pd.read_csv(csv_path)
     if len(df) == 0:
         return {"error": True, "detail": "CSV has no rows"}
-    payload: dict = {"n_samples": int(len(df)), "features": infer_schema(df)["features"]}
+    baseline = await _baseline_features(model_id) if align_to_model else None
+    summary = infer_schema_like(df, baseline) if baseline is not None else infer_schema(df)
+    payload: dict = {"n_samples": int(len(df)), "features": summary["features"]}
     if label is not None:
         payload["label"] = label
     if thresholds:
@@ -366,6 +388,9 @@ async def proxyml_put_schema(schema: dict, schema_name: str) -> dict:
 
     An optional top-level n_samples (as returned by proxyml_infer_schema) records
     how many rows the statistics came from; data-drift checks use it by default.
+    An optional top-level source, "data" (computed from real rows, unedited) or
+    "hand_written", records where the statistics came from; it is reported as
+    baseline_source on drift checks. Leave it out if unsure.
     """
     async with _client() as c:
         r = await c.put(f"/schema/{schema_name}", content=json.dumps(schema))
