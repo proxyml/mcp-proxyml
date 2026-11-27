@@ -200,6 +200,18 @@ def test_check_data_drift_follows_the_models_types(monkeypatch, tmp_path):
     assert feats["size"]["categories"] == ["S", "M", "L", "XL"]
 
 
+def test_check_data_drift_refuses_models_with_array_features(monkeypatch, tmp_path):
+    seen = {"gets": []}
+    monkeypatch.setenv("PROXYML_API_KEY", "k")
+    feats = [*BASELINE_FEATURES, {"type": "array", "name": "emb", "immutable": True, "width": 3,
+                                   "mean": [0.0, 0.1, 0.2], "rms_radius": 1.0}]
+    _mock_ci(monkeypatch, _routed(seen, httpx.Response(200, json={"features": feats})))
+    result = asyncio.run(proxyml_check_data_drift("m1", _drift_csv(tmp_path)))
+    assert result["error"] is True and result["array_features"] == ["emb"]
+    assert "SDK" in result["detail"]
+    assert "body" not in seen  # nothing was posted
+
+
 @pytest.mark.parametrize("status,body", [(500, {"detail": "boom"}), (200, {"unexpected": 1})])
 def test_check_data_drift_falls_back_when_the_schema_is_unavailable(monkeypatch, tmp_path, status, body):
     seen = {"gets": []}

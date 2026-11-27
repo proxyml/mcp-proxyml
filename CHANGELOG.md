@@ -11,6 +11,14 @@ rather than written at release time.
 
 ## [Unreleased]
 
+### Changed
+- `proxyml_check_data_drift` now refuses (with an explanatory error, and without
+  sending anything) when the model has array features (embeddings etc.): a CSV
+  cannot carry vectors, so the check would report them as changed. Use the
+  `proxyml` SDK's `check_data_drift()` for those models. Models with array
+  features otherwise work: pass `null` in an array feature's slot of any
+  instance; the server rejects vector values.
+
 ## [0.1.12] - 2026-11-26
 
 ### Changed

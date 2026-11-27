@@ -325,6 +325,18 @@ async def proxyml_check_data_drift(
     if len(df) == 0:
         return {"error": True, "detail": "CSV has no rows"}
     baseline = await _baseline_features(model_id) if align_to_model else None
+    arrays = [f["name"] for f in (baseline or []) if f.get("type") == "array"]
+    if arrays:
+        return {
+            "error": True,
+            "detail": (
+                f"The model has array feature(s) {arrays} (embeddings or other vectors). A CSV cannot carry "
+                "them, so this tool cannot check them and would report them as changed. Run the check with "
+                "the proxyml SDK instead: proxyml.check_data_drift(model_id, df), where the DataFrame column "
+                "holds the vectors. Only a summary of each array leaves your machine."
+            ),
+            "array_features": arrays,
+        }
     summary = infer_schema_like(df, baseline) if baseline is not None else infer_schema(df)
     payload: dict = {"n_samples": int(len(df)), "features": summary["features"]}
     if label is not None:
@@ -412,6 +424,8 @@ async def proxyml_synthesize_data(
     If instance is provided, blends schema samples with perturbations around
     that point (useful for local explanations and counterfactual search).
     Returns samples, feature_names, and feature_types.
+
+    Array features (embeddings or other vectors) are never sent to the server: put null in an array feature's slot.
     """
     async with _client() as c:
         if instance is None:
@@ -444,6 +458,8 @@ async def proxyml_train_surrogate(
     predictions: your model's output for each sample, in the same order.
     task: 'classification', 'regression', or 'auto' (default).
     Returns version ID, fidelity metrics, and any training warnings.
+
+    Array features (embeddings or other vectors) are never sent to the server: put null in an array feature's slot.
     """
     payload: dict = {
         "samples": samples,
@@ -500,6 +516,8 @@ async def proxyml_explain_local(
 
     Returns prediction, feature_contributions (sorted by abs contribution),
     intercept, and optionally probabilities and per-class contributions.
+
+    Array features (embeddings or other vectors) are never sent to the server: put null in an array feature's slot.
     """
     payload: dict = {"instance": instance}
     if version is not None:
@@ -521,6 +539,8 @@ async def proxyml_find_counterfactual(
 
     A counterfactual is not guaranteed — check the 'counterfactual' field in the
     response (None means none was found within the search budget).
+
+    Array features (embeddings or other vectors) are never sent to the server: put null in an array feature's slot.
     """
     payload: dict = {
         "instance": instance,
@@ -590,6 +610,8 @@ async def proxyml_predict_batch(
     Returns predictions in the same order as instances, along with the
     model version used. Useful for comparing surrogate predictions against
     a dev model's output on the same synthetic samples.
+
+    Array features (embeddings or other vectors) are never sent to the server: put null in an array feature's slot.
     """
     payload: dict = {"inputs": instances}
     if version is not None:
@@ -640,6 +662,8 @@ async def proxyml_explain_local_batch(
 
     Equivalent to calling proxyml_explain_local for each instance, but more
     efficient. Returns a 'results' list in the same order as instances.
+
+    Array features (embeddings or other vectors) are never sent to the server: put null in an array feature's slot.
     """
     payload: dict = {"instances": instances}
     if version is not None:
@@ -724,6 +748,8 @@ async def proxyml_predict(
 
     Returns prediction, and optionally probability (classification) or
     a regression value. Use proxyml_predict_batch for multiple instances.
+
+    Array features (embeddings or other vectors) are never sent to the server: put null in an array feature's slot.
     """
     payload: dict = {"inputs": instance}
     if version is not None:
