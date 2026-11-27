@@ -11,6 +11,8 @@ rather than written at release time.
 
 ## [Unreleased]
 
+## [0.1.13] - 2026-11-27
+
 ### Changed
 - `proxyml_check_data_drift` now refuses (with an explanatory error, and without
   sending anything) when the model has array features (embeddings etc.): a CSV
